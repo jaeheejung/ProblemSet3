@@ -74,6 +74,87 @@ system.time(laply(.data=1:6,.fun=significant.ts,.parallel=TRUE))
 #In parallel, system time is significantly larger for all three time measures. An instance is user:0.041, system:0.080, elapsed:0.064. I tried running system.time with different numbers of cores, but system time only gets larger as the number of cores increases. In essence, no time is saved.
 
 ####CALCULATING FIT STATISTICS####
+##1
+OutofStep <- read.table("http://pages.wustl.edu/montgomery/incumbents.txt",header=TRUE,row.names="x")
+#Reads in data from Jacob's website with the first row of the dataset as the names of the variables and the variable "x" as the numbers of observations
+index <- sample(1:nrow(OutofStep),nrow(OutofStep)/2)
+#Creates a vector of randomly sampled row numbers from OutofStep dataset (half)
+training.data <- OutofStep[index,]
+#This partition of OutofStep is my training set.
+testing.data <- OutofStep[-index,]
+#This partition of OutofStep is my testing set.
+
+model.1 <- lm(voteshare~chalspend+incspend,data=training.data)
+#model.1 has challenger spending and incumbent spending as explanatory variables
+model.2 <- lm(voteshare~presvote+inparty+midterm,data=training.data)
+#model.2 has presidential candidate vote share, the party of the incumbent as the president's party, and midterm election as explanatory variables
+model.3 <- lm(voteshare~seniority+urban,data=training.data)
+#model.3 has seniority of the incumbent and urban population as explanatory variables
+
+predict.1 <- predict(model.1,newdata=testing.data)
+#Predicts values of voteshare in testing.data using model.1
+predict.2 <- predict(model.2,newdata=testing.data)
+#Predicts values of voteshare in testing.data using model.2
+predict.3 <- predict(model.3,newdata=testing.data)
+#Predicts values of voteshare in testing.data using model.3
+
+##2
+P <- matrix(c(predict(model.1,newdata=testing.data), predict(model.2,newdata=testing.data), predict(model.3,newdata=testing.data)),ncol=3)
+#P is a 3344x3 matrix of predictions about testing.data that I calculated with the three models I constructed above.
+
+y <- testing.data$voteshare
+#y is a vector of "true" observed voteshares separated out from testing.data
+
+library(DataCombine)
+#This package is needed to construct lagged variables.
+data.with.lagged.var <- slide(testing.data,Var="voteshare",slideBy=-1)
+#slide() creates lagged observations of voteshare.
+r <- data.with.lagged.var$"voteshare-1"
+#r is naive forecast, a vector of lagged observations of voteshare
+
+fit.stats.matrix <- function(y,P,r){
+#This function creates a matrix of six fit statistics for the three models I constructed before.
+rmse <- function(P){
+	sqrt(sum((P-y)^2,na.rm=TRUE)/length(y))
+}
+#rmse() calculates RMSE
+rmse.vec <- aaply(.data=P,.margins=2,.fun=rmse)
+#A vector of the values of RMSE for the three models is obtained by using aaply() across the columns of the prediction matrix.
+mad <- function(P){
+	median(abs(P-y),na.rm=TRUE)
+}
+#mad() calculates MAD
+mad.vec <- aaply(.data=P,.margins=2,.fun=mad)
+#A vector of the values of MAD for the three models is obtained by using aaply() across the columns of the prediction matrix.
+rmsle <- function(P){
+	sqrt(sum((log(P+1)-log(y+1))^2,na.rm=TRUE)/length(y))
+}
+#rmsle() calculates RMSLE
+rmsle.vec <- aaply(.data=P,.margins=2,.fun=rmsle)
+#A vector of the values of RMSLE for the three models is obtained by using aaply() across the columns of the prediction matrix.
+mape <- function(P){
+	sum((abs(P-y)/abs(y))*100,na.rm=TRUE)/length(y)
+}
+#mape() calculates MAPE
+mape.vec <- aaply(.data=P,.margins=2,.fun=mape)
+#A vector of the values of MAPE for the three models is obtained by using aaply() across the columns of the prediction matrix.
+meape <- function(P){
+	median((abs(P-y)/abs(y))*100,na.rm=TRUE)
+}
+#meape() calculates MEAPE
+meape.vec <- aaply(.data=P,.margins=2,.fun=meape)
+#A vector of the values of MEAPE for the three models is obtained by using aaply() across the columns of the prediction matrix.
+mrae <- function(P){
+	median(abs(P-y)/abs(r-y),na.rm=TRUE)
+}
+#mrae() calculates MRAE
+mrae.vec <-aaply(.data=P,.margins=2,.fun=mrae)
+#A vector of the values of MRAE for the three models is obtained by using aaply() across the columns of the prediction matrix.
+return(cbind(rmse.vec,mad.vec,rmsle.vec,mape.vec,meape.vec,mrae.vec))
+#The returning matrix is created by column binding the vectors of the six fit statistics.
+}
+
+#3
 
 
 
